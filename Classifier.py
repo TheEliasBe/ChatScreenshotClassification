@@ -1,10 +1,15 @@
 import numpy as np
 import os
+
+from imblearn.over_sampling import RandomOverSampler
 from skimage import data, io, color, transform
 import pandas as pd
 from sklearn.linear_model import SGDClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix
+import seaborn as sn
+import imblearn
 
 
 # load images
@@ -19,6 +24,9 @@ chat_files = np.concatenate((chat_files, chat_labels), axis=1)
 non_chat_files = np.transpose(np.array([other_file_names]))
 non_chat_labels = np.transpose(np.array([[0.0]*len(non_chat_files)]))
 non_chat_files = np.concatenate((non_chat_files, non_chat_labels), axis=1)
+
+print("Number of samples", len(chat_files)+len(non_chat_files), sep="\n")
+print("Ratio Class 'Chat' of all samples", len(chat_files)/(len(chat_files)+len(non_chat_files)), sep="\n")
 
 # combine files
 files = np.concatenate((chat_files, non_chat_files), axis=0)
@@ -85,16 +93,30 @@ df = pd.DataFrame(files)
 df[0] = df[0].astype('object')
 df.iloc[:,1:] = df.iloc[:,1:].astype('float')
 
+# set X and y
+X = df.iloc[:,2:].astype('float')
+y = df[1].astype('int')
+print(X)
+
+# random over sample the non-chat files
+oversample = RandomOverSampler(sampling_strategy='minority')
+X_over, y_over = oversample.fit_resample(X, y)
+
 # split data into test and train
-X_train, X_test, y_train, y_test = train_test_split(df.iloc[:,2:], df[1], test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X_over, y_over, test_size=0.2, random_state=42)
 y_train = np.asarray(y_train,dtype=np.float64)
 y_test = np.asarray(y_test,dtype=np.float64)
 
+
+
 # create classifier
-sgd_clf = SGDClassifier(random_state=42, max_iter=1000, tol=1e-3)
-sgd_clf.fit(X_train, y_train)
-y_pred = sgd_clf.predict(X_test)
-print(accuracy_score(y_test, y_pred))
+clf = MLPClassifier(hidden_layer_sizes=(10, 10, 10), max_iter=1000)
+clf.fit(X_train, y_train)
+y_pred = clf.predict(X_test)
+print("Accuracy", accuracy_score(y_test, y_pred), sep="\n")
+cm = confusion_matrix(y_test, y_pred)
+df_cm = pd.DataFrame(cm, range(2), range(2))
+sn.heatmap(df_cm, annot=True)
 
 # find & display all misclassified instances
 a = np.hstack((np.c_[y_pred], np.c_[y_test], X_test))

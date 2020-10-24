@@ -26,10 +26,7 @@ non_chat_files = np.transpose(np.array([other_file_names]))
 non_chat_labels = np.transpose(np.array([[0.0]*len(non_chat_files)]))
 non_chat_files = np.concatenate((non_chat_files, non_chat_labels), axis=1)
 
-#print("Number of samples", len(chat_files)+len(non_chat_files), sep="\n")
-#print("Ratio Class 'Chat' of all samples", len(chat_files)/(len(chat_files)+len(non_chat_files)), sep="\n")
-
-# width, height constant as an average of ca. 400 images
+# width, height constant as an average of ax. 400 images
 WIDTH = 1024
 HEIGHT = 1607
 
@@ -99,24 +96,14 @@ def save_hog(width, height):
         fd, hog_image = hog(image, orientations=8, pixels_per_cell=(4, 4),cells_per_block = (1, 1), visualize = True, multichannel = False)
         np.save("media/hog/"+img_file[0], hog_image)
 
-def train_model(use_hog=False):
+def generate_train_test_data():
     global files
     # read resized and greyed images an np-arrays
     pixels = []
-    if use_hog:
-        files = os.listdir("media/hog")
-        for img_file in files:
-            print("Reading HOG", img_file)
-            img = np.load("media/hog/"+img_file)
-            img = img.flatten()
-            pixels.append(img)
-    else:
-        for img_file in files:
-            img = io.imread("media/resized/"+img_file[0])
-            img = img.flatten()
-            pixels.append(img)
-
-
+    for img_file in files:
+        img = io.imread("media/resized/" + img_file[0])
+        img = img.flatten()
+        pixels.append(img)
     pixels = np.array(pixels, dtype=np.float)
     files = np.concatenate((files, pixels), axis=1)
 
@@ -125,10 +112,10 @@ def train_model(use_hog=False):
 
     # assign dtypes
     df[0] = df[0].astype('object')
-    df.iloc[:,1:] = df.iloc[:,1:].astype('float')
+    df.iloc[:, 1:] = df.iloc[:, 1:].astype('float')
 
     # set X and y
-    X = df.iloc[:,2:].astype('float')
+    X = df.iloc[:, 2:].astype('float')
     y = df[1].astype('int')
 
     # random over sample the non-chat files
@@ -145,13 +132,15 @@ def train_model(use_hog=False):
 
     # split data into test and train
     X_train, X_test, y_train, y_test = train_test_split(X_over, y_over, test_size=0.2, random_state=42)
-    y_train = np.asarray(y_train,dtype=np.float64)
-    y_test = np.asarray(y_test,dtype=np.float64)
+    y_train = np.asarray(y_train, dtype=np.float64)
+    y_test = np.asarray(y_test, dtype=np.float64)
 
+    return X_train, y_train, X_test, y_test
+
+def train_model(X_train, y_train, X_test, y_test, store_model=False):
     # create classifier
     clf = MLPClassifier(hidden_layer_sizes=(100, 100, 10), max_iter=1000, learning_rate='adaptive')
-    with open("pickle_model_90_1.pkl", 'rb') as file:
-        clf2 = pickle.load(file)
+
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
     print("Accuracy", accuracy_score(y_test, y_pred), sep="\n")
@@ -159,28 +148,25 @@ def train_model(use_hog=False):
     df_cm = pd.DataFrame(cm, range(2), range(2))
     sn.heatmap(df_cm, annot=True)
     plt.show()
-    pkl_filename = "pickle_model_90_1.pkl"
-    with open(pkl_filename, 'wb') as file:
-       pickle.dump(clf, file)
+    if store_model:
+        pkl_filename = "pickle_model_90_1.pkl"
+        with open(pkl_filename, 'wb') as file:
+           pickle.dump(clf, file)
 
-    # find & display all misclassified instances
-    a = np.hstack((np.c_[y_pred], np.c_[y_test], X_test))
+def test_pickel():
+    global files
+    pixels = []
+    X_train, y_train, X_test, y_test = generate_train_test_data()
+    # Load from file
+    with open("pickle_model_90_1.pkl", 'rb') as file:
+        pickle_model = pickle.load(file)
+        y_pred = pickle_model.predict(X_test)
+        cm = confusion_matrix(y_test, y_pred)
+        print("Accuracy", accuracy_score(y_test, y_pred), sep="\n")
+        df_cm = pd.DataFrame(cm, range(2), range(2))
+        sn.heatmap(df_cm, annot=True)
+        plt.show()
 
-
-    # for line in a:
-    #     if line[0] == 0 and line[1] == 1:
-    #         # classified as non-chat but actually chat
-    #         i = np.reshape(line[2:], (159,103))
-    #         i = i.astype('float')
-    #         io.imshow(arr=i)
-    #         io.show()
-    #
-    #     if line[0] == 1 and line[1] == 0:
-    #         # classified as chat but actually non-chat
-    #         i = np.reshape(line[2:], (159,103))
-    #         i = i.astype('float')
-    #         io.imshow(arr=i)
-    #         io.show()
 
 def classify(img_arr, model_file_name):
     for index in range(len(img_arr)):
@@ -213,7 +199,7 @@ i4 = io.imread("media/resized/2s7q2tbdd1o51.png")
 i5 = io.imread("media/downscaled.jpg")
 i6 = io.imread("media/hg.png")
 
-train_model()
+test_pickel()
 # class_id, prob = classify([i6], "pickle_model_90_1.pkl")
 #
 # if class_id[0] == 0:

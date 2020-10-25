@@ -10,7 +10,7 @@ from skimage.exposure import rescale_intensity
 import numpy as np
 
 f = ["media/convo/0tkirgfqmcc31.png", "media/convo/0q3roi8vo3j41.jpg", "media/convo/0kby0qwor6h21.jpg", "media/convo/1yavx48bpe621.png"]
-images = cv2.imread(f[3])
+images = cv2.imread(f[1])
 
 resized = imutils.resize(images, width=300)
 ratio = images.shape[0] / float(resized.shape[0])
@@ -97,12 +97,20 @@ for i2, b in bounding_boxes.iterrows():
 # assign bounding boxes to chat sides
 tolerance_side_assignement = 0.17
 for i, b in bounding_boxes.iterrows():
-	if b['x'] <= tolerance_side_assignement * w:
+	if b['x'] <= tolerance_side_assignement * width:
 		bounding_boxes.at[i, 'partner'] = 0
-	elif b['x'] + b['w'] >= (1-tolerance_side_assignement)*w:
+	elif b['x'] + b['w'] >= (1-tolerance_side_assignement)*width:
 		bounding_boxes.at[i, 'partner'] = 1
 	else:
 		bounding_boxes.at[i, 'partner'] = -1
 
 cv2.imwrite('image.jpg', rgb)
-print(bounding_boxes[['x', 'w', 'text', 'partner']])
+
+# strip text from additional white spaces
+bounding_boxes['text'] = bounding_boxes['text'].apply(lambda t : t.strip())
+
+# filter out common stops words in messaging services
+stop_words = ['Type', 'a', 'message', 'Type a message', 'Sent', 'sent']
+bounding_boxes = bounding_boxes[~bounding_boxes['text'].isin(['Type', 'a', 'message', 'Type a message', 'Sent', 'sent'])]
+
+print(bounding_boxes[(bounding_boxes['text'].str.len() > 0) & (bounding_boxes['partner'] >= 0)])

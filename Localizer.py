@@ -9,8 +9,8 @@ from skimage.filters import threshold_yen
 from skimage.exposure import rescale_intensity
 import numpy as np
 
-f = ["media/convo/0tkirgfqmcc31.png", "media/convo/0q3roi8vo3j41.jpg", "media/convo/0kby0qwor6h21.jpg", "media/convo/1yavx48bpe621.png"]
-images = cv2.imread(f[1])
+f = ["media/convo/0tkirgfqmcc31.png", "media/convo/0q3roi8vo3j41.jpg", "media/convo/0kby0qwor6h21.jpg", "media/convo/1yavx48bpe621.png", "media/convo/0vzd3bcrq8a31.jpg"]
+images = cv2.imread(f[-1])
 
 resized = imutils.resize(images, width=300)
 ratio = images.shape[0] / float(resized.shape[0])
@@ -113,4 +113,5 @@ bounding_boxes['text'] = bounding_boxes['text'].apply(lambda t : t.strip())
 stop_words = ['Type', 'a', 'message', 'Type a message', 'Sent', 'sent']
 bounding_boxes = bounding_boxes[~bounding_boxes['text'].isin(['Type', 'a', 'message', 'Type a message', 'Sent', 'sent'])]
 
+bounding_boxes = bounding_boxes.sort_values(by=['y'])
 print(bounding_boxes[(bounding_boxes['text'].str.len() > 0) & (bounding_boxes['partner'] >= 0)])

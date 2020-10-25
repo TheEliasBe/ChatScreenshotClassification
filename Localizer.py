@@ -5,23 +5,23 @@ import pandas as pd
 from TextBubbleDetector import Detector, is_in_bounding_box
 import imutils
 from skimage import io
+from skimage.filters import threshold_yen
+from skimage.exposure import rescale_intensity
 import numpy as np
 
-f = ["media/convo/0tkirgfqmcc31.png", "media/convo/0q3roi8vo3j41.jpg", "media/convo/0kby0qwor6h21.jpg"]
-images = cv2.imread(f[0])
+f = ["media/convo/0tkirgfqmcc31.png", "media/convo/0q3roi8vo3j41.jpg", "media/convo/0kby0qwor6h21.jpg", "media/convo/1yavx48bpe621.png"]
+images = cv2.imread(f[3])
 
 resized = imutils.resize(images, width=300)
 ratio = images.shape[0] / float(resized.shape[0])
 
 rgb = cv2.cvtColor(images, cv2.COLOR_BGR2RGB)
-results = pytesseract.image_to_data(rgb, output_type=Output.DICT)
-text = pytesseract.image_to_boxes(rgb)
+height, width, _ = np.shape(rgb)
+height, width = height*2, width*2
+rgb = cv2.resize(rgb, (int(width),int(height)))
+grey = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
 
-# number of pixels +- still considered aline of text
-line_threshold = 10
-
-# number of pixelx +- still considered a text bubble
-line_break_threshold = 66
+results = pytesseract.image_to_data(grey, output_type=Output.DICT)
 
 # variables
 lines = []
@@ -46,25 +46,11 @@ for i in range(0, len(results["text"])):
 
 	conf = int(results["conf"][i])
 
-
-	if conf > 10 and text != " ":
+	if conf > 50 and text != " ":
 		# print(text, "Y", y, "ΔY", abs(curr_y - y))
 		total_width += w
 		cv2.rectangle(rgb, (x,y), (x+w, y+h), (0,0,255),2)
 		word_df = word_df.append({'text': text, 'x': x, 'y': y, 'width': w, 'height': h}, ignore_index=True)
-		if abs(curr_y - y) <= line_threshold or curr_y == 0:
-			l.append(text)
-			x_list.append(x)
-		else:
-			lines_df = lines_df.append({'text': l.copy(), 'x': min(x_list), 'y': curr_y, 'width': total_width, 'height': h}, ignore_index=True)
-			x_list = []
-			x_list.append(x)
-			# print("Line Finished", l)
-			lines.append(l.copy())
-			l.clear()
-			total_width = 0
-			l.append(text)
-		curr_y = y
 
 print("word_df")
 print(word_df)
@@ -81,6 +67,7 @@ cnts, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
 bounding_boxes = pd.DataFrame(columns=['x', 'y', 'w', 'h', 'text', 'partner'])
 bounding_boxes['text'] = bounding_boxes['text'].astype('string')
+bounding_boxes['partner'] = bounding_boxes['partner'].astype('int')
 
 # find bounding rectangle of each contour
 for c in cnts:
@@ -93,24 +80,29 @@ left_most = bounding_boxes['x']
 right_most = bounding_boxes['x'] + bounding_boxes['w']
 
 # remove bounding box covering the entire image
-h, w, _ = np.shape(rgb)
-bounding_boxes = bounding_boxes[bounding_boxes['w'] != w]
+bounding_boxes = bounding_boxes[bounding_boxes['w'] != width]
 
 
 for i2, b in bounding_boxes.iterrows():
 	for i1, t in word_df.iterrows():
 		box_dim = {'x': int(b['x']), 'y': int(b['y']), 'w': int(b['w']), 'h': int(b['h'])}
 		text_dim = {'x': t['x'], 'y': t['y'], 'w': t['width'], 'h': t['height']}
-		cv2.rectangle(rgb, (box_dim['x'], box_dim['y']), (box_dim['x']+box_dim['w'], box_dim['y']+box_dim['h']), (255,0,0), 2)
-		cv2.rectangle(rgb, (text_dim['x'], text_dim['y']), (text_dim['x'] + text_dim['w'], text_dim['y'] + text_dim['h']), (0, 255, 0), 2)
+		cv2.rectangle(rgb, (box_dim['x'], box_dim['y']), (box_dim['x']+box_dim['w'], box_dim['y']+box_dim['h']), (255,0,0), 4)
+		cv2.rectangle(rgb, (text_dim['x'], text_dim['y']), (text_dim['x'] + text_dim['w'], text_dim['y'] + text_dim['h']), (0, 255, 0), 4)
 		if is_in_bounding_box(box_dim, text_dim):
 			#print(box_dim)
 			#print(text_dim)
 			bounding_boxes.at[i2, 'text'] = str(bounding_boxes.at[i2, 'text']) + " " +str(t['text'])
-print(bounding_boxes)
 
 # assign bounding boxes to chat sides
+tolerance_side_assignement = 0.17
 for i, b in bounding_boxes.iterrows():
-	...
+	if b['x'] <= tolerance_side_assignement * w:
+		bounding_boxes.at[i, 'partner'] = 0
+	elif b['x'] + b['w'] >= (1-tolerance_side_assignement)*w:
+		bounding_boxes.at[i, 'partner'] = 1
+	else:
+		bounding_boxes.at[i, 'partner'] = -1
 
 cv2.imwrite('image.jpg', rgb)
+print(bounding_boxes[['x', 'w', 'text', 'partner']])
